@@ -80,15 +80,33 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	tempFile.Seek(0, io.SeekStart)
 
+	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "unable to get video aspect ratio", err)
+		fmt.Println("Error getting video aspect ratio:", err)
+		return
+	}
+
+	var prefixVideo string
+	if aspectRatio == "16:9" {
+		prefixVideo = "landscape"
+	} else if aspectRatio == "9:16" {
+		prefixVideo = "portrait"
+	} else {
+		prefixVideo = "other"
+	}
+
 	fileName, err := generateRandomFilename("mp4")
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "unable to generate random filename", err)
 		return
 	}
 
+	key := fmt.Sprintf("%s/%s", prefixVideo, fileName)
+
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.s3Bucket),
-		Key:         aws.String(fileName),
+		Key:         aws.String(key),
 		Body:        tempFile,
 		ContentType: aws.String(mediaType),
 	})
@@ -97,7 +115,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileName)
+	s3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
 	video.VideoURL = &s3URL
 
 	err = cfg.db.UpdateVideo(video)
