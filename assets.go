@@ -43,11 +43,22 @@ func getVideoAspectRatio(filePath string) (string, error) {
 		return "", nil
 	}
 
-	if width*9 == height*16 {
+	// identify aspect ratio based on width and height
+	if width == 16*height/9 {
 		return "16:9", nil
-	} else if width*16 == height*9 {
+	} else if height == 16*width/9 {
 		return "9:16", nil
 	} else {
 		return "other", nil
 	}
+}
+
+func processVideoForFastStart(filePath string) (string, error) {
+	outputFilePath := filePath + ".processing"
+	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputFilePath)
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	return outputFilePath, nil
 }
